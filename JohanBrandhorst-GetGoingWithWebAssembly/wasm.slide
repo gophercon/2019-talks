@@ -1,0 +1,342 @@
+Get Going with WebAssembly
+25th July 2019
+
+Johan Brandhorst
+@johanbrandhorst
+https://jbrandhorst.com
+
+: I'm Johan, I'm Swedish but I currently live and work in the UK. I'm a maintainer of various open source projects, I've contributed to the Go standard library and I run a blog writing mainly about Go and gRPC. This is my first Gophercon and I'm very excited to be here. I'm here today to give an introduction to WebAssembly with Go.
+: Next up: Overview
+: 00:30
+
+* Today we will
+
+- Learn about WebAssembly (WASM)
+- Learn to use WebAssembly from Go
+- Show what is possible today
+- See what will be possible _tomorrow_
+
+.image witch.svg 300 _
+.caption Gopher by [[https://twitter.com/egonelbre][@egonelbre]].
+
+: Today we will learn what WebAssembly is, how to use WebAssembly with Go, show whats possible today and briefly look at what will be possible tomorrow!
+: Next up: Lets start with WebAssembly
+: 00:30
+
+* WebAssembly
+
+- Binary instruction format
+- W3C WebAssembly Working Group, Community Group
+- asm.js, NativeClient (NaCl)
+
+.image w3c.svg 350 _
+.caption Source: [[https://www.w3.org/Consortium/Legal/logo-usage-20000308][Official W3C logo]].
+
+: What is WebAssembly? It is a web standard binary instruction format, like x86 but developed for the web, by the World Wide Web Consortium, with representatives from all 4 major browsers, and with community contribution. It grew out of the asm.js project, which proved that languages like C/C++ could be transpiled to JavaScript and run in the browser. Google developed the Native Client (NaCl), but it was never implemented by any other browsers. Instead, a joint effort was started to develop something new. WebAssembly was designed to be fast to interpret, fast to execute and of course, secure to run.
+: Next up: Where can we run it?
+: 01:00
+
+* Runtimes
+
+- Chrome, Firefox, Safari, Edge and others
+- Runtimes (`wasmer`, `wasmtime`, `wagon`, `life`, `lucent`, `WAVM`, more)
+- Bare Metal (?)
+
+.image wasm.svg 350 _
+.caption Source: [[https://github.com/carlosbaraza/web-assembly-logo][Official WebAssembly logo]].
+
+: It has been supported in Chrome, Firefox, Safari and Edge since late 2017, with every modern browser that matters now supporting it. A smattering of runtimes written in a variety of languages have appeared, with wagon and life being the larger Go based WebAssembly runtime projects. The prevalence of runtimes means that WebAssembly isn't just a language for the web anymore, but runnable anywhere the runtimes can run. We might even end up with bare metal chips implementing a WebAssembly runtime. All of that is still a way off though, and today we will focus on using WebAssembly in the browser.
+: Next up: How can we interact with the world from WebAssembly?
+: 01:30
+
+* Platform interfaces
+
+- JavaScript
+- WebAssembly System Interface (`WASI`)
+
+.image platforms.png 400 _
+.caption Source: [[https://github.com/carlosbaraza/web-assembly-logo][Official WebAssembly logo]], [[https://github.com/WebAssembly/WASI][WASI logo]].
+
+: WebAssembly in browsers ship with a JavaScript interface to access existing browser APIs to perform tasks such as DOM manipulation, making network calls and using WebGL, to name a few. We'll take a look at exactly how that works with Go a bit later on. Another interesting platform interface is the recently announced WebAssembly System Interface, AKA WASI. Initially designed by Mozilla and Fastly, it's being standardized by a WebAssembly working group. It is designed to be used when compiling WebAssembly for running outside the browser, and provides a syscall like interface to system features like files and network sockets. It's currently still in development, but provisional support for WASI is present in Fastly's WebAssembly runtime lucent and Mozilla's wasmtime.
+: Next up: What does this have to do with Go? Lets take a step back.
+: 03:00
+
+* GopherJS
+
+- Compiles Go to JavaScript
+- Existed since 2015
+- Written by Richard Musiol ([[https://github.com/neelance][@neelance]])
+
+.image gopherjs.svg
+
+: GopherJS has allowed Go in the browser since 2015. It's a tool for compiling Go to JavaScript, written by Richard Musiol, AKA neelance. It supports most of standard library, and there are many community bindings for existing web technologies such as websockets, local storage and others. It's very easy to use, as this graphic shows you simply provide your main.go file to gopherjs build and it spits out a JavaScript file that you can load in your HTML. It remains the most mature way of running Go in the browser, and is used by open source projects such as perkeep.
+: Next up: What about WebAssembly?
+: 04:00
+
+* WebAssembly for Go
+
+- Tracking issue opened in Feb 2017
+- Richard Musiol announced work in Nov 2017
+- Shipped in Go 1.11 (Aug 2018)
+
+.image gopher_webassembly.png _ 300
+.caption Source: [[https://react-etc.net/entry/webassembly-support-lands-in-go-language-golang-wasm-js][react-etc.net]].
+
+: In early 2017, Brad Fitzpatrick opened a tracking issue for implementing a WebAssembly target in Go. The conversation quickly took off but no real concensus was found for the best way to implement it in the existing compiler codebase. The WebAssembly spec is notably missing the goto keyword, which makes implementing control flow harder, and this hindered initial work. However, by November Richard Musiol, the author of GopherJS, announced that he had started work on implementing a WebAssembly target for the go compiler, and it shipped in Go 1.11, roughly 9 months later. Richard deserves a lot of credit for his amazing work in bringing this novel architecture to Go on his own, in his spare time.
+: Next up: Current status of Go implementation
+: 05:00
+
+* Current status (Go 1.13)
+
+- Experimental support
+- All standard tests passing
+- JavaScript interface
+- No WASI yet
+
+.image gowasm.svg
+
+: Go 1.11 shipped with experimental WebAssembly support, which means it doesn't have the same backward compatibility guarantees as the rest of the standard library, and this is still true today, with no clear plan on stabilization. You can expect breaking changes to still happen between releases, so be careful when considering using it for production code. It supports most of the standard library, including net/http client requests, which we'll see more about later. Currently only the JavaScript system interface is implemented, but there are plans to implement WASI in future Go releases (hopefully 1.14!). As the graphic shows, compiling Go code for WebAssembly is as easy as any other CGO-free cross compilation, you simply specify the GOOS and GOARCH environment variables when building.
+: Next up: Lets briefly discuss the elephant in the room
+: 06:00
+
+* Compiled file sizes
+
+- Not a design goal of Go
+- Heavy runtime
+- Reflection hindering dead code elimination
+- No GOTO in WebAssembly
+
+.image anatomy.png _ 900
+.caption Generated with [[https://github.com/knz/go-binsize-viz][github.com/knz/go-binsize-viz]].
+
+: As we'll see it produces quite large binaries, and there's a few reasons for that. Small binary size has never been a design goal of Go, and you've probably yourself noticed that large Go codebases tend to produce large binaries. The CockroachDB binary is 123 MEGAbytes large, unstripped. The heavy Go runtime, garbage collector and difficulties of performing dead code elimination in a language that has runtime reflection all add to the problem. The image we're looking at is the weight of each packages contents in a hello world binary built for linux/amd64. It adds up to 1.2 MB. Furthermore, we discussed earlier that WebAssembly doesn't have a goto instruction and this leads to larger output for the same functionality. We'll see later what we can do about file size.
+: Next up: How we can use WebAssembly with Go?
+: 07:00
+
+* Server setup
+
+- Copy necessary files
+    $GOROOT/misc/wasm/wasm_exec.html // Example of how to load WebAssembly
+    $GOROOT/misc/wasm/wasm_exec.js   // Mandatory
+- Use correct content type
+.code content-type.go /contentTypeSetter/,+7
+
+: Little bit of server setup necessary, mostly to set the content type correctly. Browsers will not parse and run WebAssembly files unless they have the correct content type set. The Go standard library comes with a very important file that ties your compiled WebAssembly file to the browser APIs. Make sure you're using the same version of the file as the version of the compiler. This is most easily accomplished by copying from GOROOT when building. wasm_exec.html is provided as an example of how to load the WebAssembly and expects a "test.wasm". I've included a little server here that serves from the filesystem and sets the content-type appropriately for files with the ".wasm" file extension.
+: Next up: Enough theory, lets take it for a spin
+: 08:00
+
+* Hello world
+
+- [[https://github.com/johanbrandhorst/wasm-experiments]]
+
+: Next up: JavaScript interface
+: 11:00
+
+* JavaScript interface
+
+- `syscall/js`
+- Based on polished GopherJS interface
+- Supports callbacks
+- Copies data across boundary
+
+.code js.js
+.code js.go
+
+: In order to access browser APIs from WebAssembly, such as for manipulating the DOM, we have the syscall/js package. This is not meant to be used by all Gophers writing WebAssembly code, and should only be necessary when you're working directly with browser APIs. It's based on the interface Richard developed for GopherJS, with its own little adaptations because of the different runtime. If you've used the GopherJS interface, it will look very familiar. It supports sending callbacks to JavaScript, which is essential to use certain JavaScript Browser APIs. Something important to note is that whenever you use the syscall/js interface, all the data you pass to JavaScript has to be copied, as WebAssembly and JavaScript don't yet have a way to share memory. As such, data transfer between the two domains should be minimized for greatest performance. What you see here is a simple example of a JavaScript snippet translated to the syscall/js calls. As you can see, this is basically writing JavaScript in Go directly. It's not so nice.
+: Next up: JavaScript demo
+: 12:00
+
+* JavaScript interface
+
+: Next up: http client demo
+: 15:00
+
+* net/http Client
+
+- Built on browser Fetch API
+- Supports most request properties (body, headers, context cancellation)
+- Supports streaming responses
+
+.image network.svg 350 _
+.caption Gopher by [[https://twitter.com/egonelbre][@egonelbre]].
+
+: As mentioned before, the Go standard library http.Client can be used in WebAssembly code. This is possible thanks to a special implementation of the DefaultTransport in the standard library, which uses the browser Fetch API to send requests and receive responses, so anytime you use the DefaultTransport it will all just work. This includes methods like http.Get, http.Post and any method calls on http.DefaultClient. It maps things like the request body, headers and even context cancellation into Fetch parameters. It supports streaming response bodies and delivers the data to the WebAssembly runtime as soon as it has been received.
+: Next up: lets look at the Client in action
+: 16:00
+
+* Fetch API
+
+: Next up: Go testing with WebAssembly
+: 19:00
+
+* Go test
+
+- Go test supported via Node or Browser
+- Standard library `go_wasm_js_exec` for Node
+- `github.com/agniva/wasmbrowsertest` for Browser
+
+.image testing.svg 350 _
+.caption Gopher by [[https://twitter.com/egonelbre][@egonelbre]].
+
+: You might think it'd be hard to run tests when it requires a WebAssembly runtime to run the code, but it's not so bad! A little known feature of go test is the -exec flag, which allows you to specify a testrunner to use when running the tests. It will automatically choose a test runner based on the architecture and os chosen if a binary called go_arch_os_exec exists in the PATH. The Go standard library comes with a go_wasm_js_exec that can be used to run the tests against a Node environment, which is how the standard library tests are run. If you're anything like me however, you refuse to install node on your machine. Fortunately, there's a third party package developed by Agniva Sarker which allows us to run compiled WebAssembly in a chromium headless window directly.
+: Next up: lets look at the Go test demo
+: 20:00
+
+* Go test
+
+: Next up: What happens if we put all of this together?
+: 22:30
+
+* Ebiten
+
+- `github.com/hajimehoshi/ebiten`
+- Super-portable Go 2D games engine
+- Supports Windows, Linux, FreeBSD, MacOS, Web, iOS and Android
+- Leverages WebGL in WebAssembly (and GopherJS)
+
+.image ebiten.png 300 _
+.caption Source: [[https://github.com/hajimehoshi/ebiten][Ebiten]].
+
+: To see the real power of Go WebAssembly, lets take a look at something more interesting. Ebiten is a 2D games engine written in Go. It supports a dazzling array of platforms and is one of the premier choices for writing 2D games in Go. It's been used to write games by professional games studios. Interestingly, it supports compiling for the web, initially via GopherJS and recently via WebAssembly. It leverages the WebGL browser API to efficiently render frames. This relies on the syscall/js interface we saw before.
+: Next up: Lets take a look at one of the Ebiten demos in WebAssembly
+: 23:00
+
+* Ebiten
+
+: Next up: What about web frameworks?
+: 27:00
+
+* Vecty
+
+- `github.com/gopherjs/vecty`
+- Originally written for GopherJS by `slimsag` and `neelance`
+- React-like library
+- Composable structs
+
+.image vecty.svg 300 _
+.caption Source: [[https://github.com/vecty/vecty-logo][Vecty]].
+
+: Vecty has been around on the Go-on-the-web scene for a while and was purpose written for creating Go web apps with GopherJS. It was created by Stephen Gutekanst and Richard Musiol and recently underwent a rewrite to make it compatible with WebAssembly. It uses a React-like interface with structs declaring styling, functionality and composition. It's currently under the GopherJS github org but may be moved to it's own in the near future.
+: Next up: Lets take a look at an example
+: 28:00
+
+* Vecty
+
+: Next up: Vecty is not the only WebAssembly Go framework.
+: 31:00
+
+* Vugu
+
+- `github.com/vugu/vugu`
+- Written by Brad Peabody
+- Vue-like library
+- Comprehensive dev environment
+- [[https://play.vugu.org/][https://play.vugu.org/]]
+
+.image vugu.png 275 _
+.caption Source: [[https://www.vugu.org/][Vugu]].
+
+: Vugu is a relatively new entrant to the Go framework scene, written by Brad Peabody. Where Vecty is a framework inspired by React, Vugu takes a lot of cues from the Vue JavaScript framework, as is evident by its in-markup logic and bindings. It uses a custom file format that is a superset of HTML, coupled with a code generator that produces the final code that gets compiled. It has put a lot of effort into the development environment, with features like automatic rebuilds and reloading on code changes. You can try it out on the online playground.
+: Next up: Lets take a look at the demo
+: 32:00
+
+* Vugu
+
+: Next up: We've seen a few demos, but what can we do about file size?
+: 35:00
+
+* What can we do about file size?
+
+- Compress files with `brotli` (80-85%), `gzip` (70%).
+- Use a CDN (`wasmgo`)
+- Avoid importing large packages (`fmt`) (🤔)
+
+.image too_high.png 400 _
+
+: File size is still a problem, so what can we do? All the demos we've looked at are served uncompressed, but we can get a quick win by using compression, and gzip compression is usually so quick that you can do it directly in the handler. Using a CDN for the static files will add compression automatically, but it will also ensure your files are available at datacenters all over the globe, which will help latency and download speeds. The brilliant Dave Brophy put together a tool called `wasmgo` which automatically builds and uploads your WebAssembly to a CDN, so feel free to try it out. We saw at the start that the standard library is somewhat responsible for the compiled files size, and we can in part help with the file size by avoiding certain imports, but lets be honest, we don't want to do that. We love Go because it's simple and just works.
+: Next up: Maybe something else
+: 36:30
+
+* TinyGo
+
+- Created by [[https://aykevl.nl/][Ayke van Laëthem]]
+- Goal: bring Go to microcontrollers
+- Produces _tiny_ binaries
+- Supports WebAssembly
+
+.image tinygo-logo.png _ 350
+.caption Source: [[https://github.com/tinygo-org/tinygo][TinyGo]].
+
+: Enter TinyGo. It was created by Ayke van Laethem primarily for using Go on microcontrollers. It took the Go WebAssembly community by storm when the first WebAssembly demo showed that it could produce tiny outputs. It's built on the LLVM stack, and it's still very early days but a very exciting project to keep an eye on. It added a garbage collector in the latest release, which takes it closer to being ready for general use. If you want to learn more about TinyGo, make sure to watch Ron Evans talk tomorrow morning!
+: Next up: Lets take a look at some examples.
+: 37:30
+
+* TinyGo
+
+: Next up: Look to the future
+: 40:00
+
+* Future
+
+: We've seen what's possible today, and it's quite a lot, but we have more good stuff to look forward to in the future.
+: Next up: Lets take a brief look at a few things I've picked out.
+: 40:30
+
+* Auto-generated Go browser APIs
+
+- `github.com/gowebapi/webapi`
+- Idiomatic, statically typed APIs generated from WebIDL
+
+.code js.go
+.code gowebapi.go
+
+: We saw earlier that you can interact with browser APIs via the syscall/js bridge, but this is pretty annoying and basically means writing JavaScript in Go. What if we could have nice, idiomatic, type safe APIs created for the browser APIs? This is a bigger job than you might think. Fortunately, there's a project called gowebapi which tries to generate Go friendly APIs from the WebIDL definitions, which would mean we can do away with the syscall/js calls for accessing the JavaScript world in the browser. WebIDL defines all the browser APIs and automatically generated APIs would mean we could quickly access new APIs and easily keep up to date with changes to the existing ones.
+: Next up: WebAssembly improvements
+: 41:30
+
+* WebAssembly improvements
+
+- Native Browser APIs
+- Threading
+- Garbage Collection (?)
+
+.image wasm_future.png 350 _
+.caption Source: [[https://hacks.mozilla.org/2018/10/webassemblys-post-mvp-future/][Mozilla Hacks]].
+
+: Among the things planned for WebAssembly itself is a proposal to make it easier to interact with browser APIs directly from WebAssembly, instead of going via the JavaScript bridge. This should mean no copying of memory between the WebAssembly and JavaScript world when using browser APIs, and not having to worry about the JavaScript callbacks and the like. Another feature on the horizon is WebAssembly threading, which is already available to testers in Chrome 70 and above. Go is very good at concurrency, and while the current implementation supports goroutines, threading is not yet supported. The last thing I've picked out is garbage collection, which is interesting to us gophers for several reasons. "What?" you might say, "we already have a garbage collector"! Ah, but that's one of the reasons the compiled files are so large. If we could exclude the garbage collector when compiling Go code for WebAssembly and instead rely on the garbage collector built into the WebAssembly runtime, we might be able to produce smaller binaries.
+: Next up: Perhaps the most exciting thing of all
+: 43:00
+
+* WASI
+
+- Run anywhere (!)
+- Access platform APIs (filesystem, network, gpu)
+
+.image wasi.png 400 _
+.caption Source: [[https://github.com/WebAssembly/WASI][WASI logo]].
+
+: We already discussed WASI briefly, but I wanted to come back to it again because it really is worth mentioning twice. Imagine compiling an application once and distributing that binary to linux, mac, windows, android, iOS, web, anywhere you have a WebAssembly runtime. We could finally realise the promise of truly portable binaries, without having to resort to using the JVM.
+: Next up: So where does this leave us?
+: 43:30
+
+* Go and WebAssembly
+
+.image survey_highlighted.png 530 _
+.caption Source: [[https://blog.golang.org/survey2018-results][Go user survey 2018]].
+
+: This is one of the graphs produced by Todd Kulesza and Steve Francia based on the Go 2018 Survey results. To me, this was the most interesting and surprising result of the entire survey. Lets remember for a moment that the WebAssembly support in the standard library and the gc compiler is entirely a result of open source contributions, primarily led by Richard Musiol. I'd like to think this graph will make the Go team invest some more resources into the development of the WebAssembly target(s), but also to encourage you guys to bring your own ideas and contributions. The potential for WebAssembly is huge.
+: Next up: wrapping up
+: 44:00
+
+* Conclusion
+
+- Go WebAssembly is here - try it!
+- WebAssembly itself is still evolving
+- Huge future potential
+- Join the Gophers Slack [[#webassembly]], [[#tinygo]] channels
+
+.image scientist.svg 300 _
+.caption Gopher by [[https://twitter.com/egonelbre][@egonelbre]].
+
+: In conclusion, we've looked at what WebAssembly is, how we can use it with Go, what's possible today and what will be possible tomorrow. WebAssembly itself is going to continue to evolve, with new features added over time. It could not only replace JavaScript in the browser, but potentially realise the promise of truly portable system binaries. What will you build?
+: 45:00
