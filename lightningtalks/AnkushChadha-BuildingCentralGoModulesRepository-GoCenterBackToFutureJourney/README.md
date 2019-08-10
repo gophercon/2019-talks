@@ -1,4 +1,4 @@
-# Building a Central Go Modules Repository: [GoCenter](https://gocenter.io) Back to the Future Journey
+# Building a Central Go Modules Repository: GoCenter Back to the Future Journey
 
 Ankush Chadha (@ankushchadha111, @jfrog)
 
